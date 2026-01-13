@@ -2,12 +2,7 @@
 
 ## Real-Time Attendance Verification Demo
 
-<p align="center">
-  <video width="800" controls>
-    <source src="assets/demo.mp4" type="video/mp4">
-    Your browser does not support the video tag.
-  </video>
-</p>
+https://github.com/user-attachments/assets/02f2f4cd-c6c2-429e-a4b6-f2ca50a4a340
 
 
 
