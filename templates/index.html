@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Attendance — Live (Identity + AntiSpoof)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; margin: 12px; text-align: center; }
+  #videoWrap { position: relative; display: inline-block; width: 100%; max-width: 480px; }
+  video, canvas {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    border: 1px solid #333;
+  }
+  canvas { position: absolute; left: 0; top: 0; pointer-events: none; }
+  #video { transform: scaleX(-1); }     /* flip back to normal view */
+  
+
+  #controls { margin-top: 12px; display: flex; flex-wrap: wrap; justify-content: center; }
+  .btn { padding: 10px 14px; margin: 6px; cursor: pointer; font-size: 16px; }
+  #status { margin-top: 10px; white-space: pre-line; font-weight: bold; }
+  #savedIndicator {
+    margin-top: 8px;
+    display: none;
+
+    background: #0b5; color: #003; padding: 8px 12px; border-radius: 8px; font-weight: bold;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  }
+  #savedIndicator a { color: inherit; text-decoration: underline; }
+</style>
+</head>
+<body>
+<h2>Attendance — Live Verification</h2>
+
+<div id="videoWrap">
+  <video id="video" autoplay playsinline></video>
+  <canvas id="overlay"></canvas>
+</div>
+
+<div id="controls">
+  <button class="btn" id="startBtn">Start Camera</button>
+  <button class="btn" id="stopBtn" disabled>Stop Camera</button>
+  <button class="btn" id="checkInBtn" disabled>Check In</button>
+  <button class="btn" id="checkOutBtn" disabled>Check Out</button>
+</div>
+
+<div id="status">Status: Idle</div>
+<div id="savedIndicator">💾 Suspicious frame saved! <span id="savedLink"></span></div>
+
+<script>
+const SERVER_URL = window.location.origin;
+const video = document.getElementById('video');
+const overlay = document.getElementById('overlay');
+const ctx = overlay.getContext('2d');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const checkInBtn = document.getElementById('checkInBtn');
+const checkOutBtn = document.getElementById('checkOutBtn');
+const statusEl = document.getElementById('status');
+const savedIndicator = document.getElementById('savedIndicator');
+const savedLinkSpan = document.getElementById('savedLink');
+
+let stream = null;
+let polling = false;
+let lastResult = null;
+let sendInterval = /Mobi|Android|iPhone/i.test(navigator.userAgent) ? 900 : 450;
+
+const params = new URLSearchParams(window.location.search);
+const userId = params.get("user_id") || "UnknownUser";
+
+async function startCamera(){
+  if(stream){ stopCamera(); }
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"user"}, audio:false});
+    video.srcObject = stream;
+    await video.play();
+    overlay.width = video.videoWidth || video.clientWidth;
+    overlay.height = video.videoHeight || video.clientHeight;
+    polling = true;
+    pollLoop();
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+    status("Camera started");
+  }catch(err){
+    alert("Camera error: " + err.message);
+    status("Camera error: " + err.message);
+  }
+}
+
+function stopCamera(){
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; }
+  polling = false;
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+  checkInBtn.disabled = true;
+  checkOutBtn.disabled = true;
+  clearOverlay();
+  status("Camera stopped");
+}
+
+function clearOverlay(){ ctx.clearRect(0,0,overlay.width, overlay.height); }
+function status(txt){ statusEl.textContent = "Status: " + txt; }
+
+function captureFrameDataURL(quality=0.5){
+  const tmp = document.createElement('canvas');
+  tmp.width = overlay.width;
+  tmp.height = overlay.height;
+  const tctx = tmp.getContext('2d');
+  tctx.drawImage(video, 0, 0, tmp.width, tmp.height);
+  return tmp.toDataURL('image/jpeg', quality);
+}
+
+async function pollLoop(){
+  while(polling){
+    try{
+      const dataUrl = captureFrameDataURL(0.4);
+      const res = await fetch(`${SERVER_URL}/process_frame`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({frame: dataUrl, user_id: userId})
+      });
+      const j = await res.json();
+      lastResult = {json:j, image:dataUrl};
+      drawResult(j);
+
+      const faceValid = (j && j.spoof === "real" && j.match === true);
+      checkInBtn.disabled = !faceValid;
+      checkOutBtn.disabled = !faceValid;
+
+      if(j && j.saved){
+        showSavedIndicator(j.saved_path || null);
+      }
+    }catch(err){
+      status("Error contacting server: " + (err.message || err));
+      clearOverlay();
+      lastResult = null;
+      checkInBtn.disabled = true;
+      checkOutBtn.disabled = true;
+    }
+    await new Promise(r=>setTimeout(r, sendInterval));
+  }
+}
+
+function drawResult(j){
+  clearOverlay();
+  if(!j || !j.bbox) return;
+  const [x, y, w, h] = j.bbox;
+  const [r, g, b] = j.color || [255,255,0];
+
+  ctx.save();
+  ctx.scale(-1, 1);                 
+  ctx.translate(-overlay.width, 0);  
+
+  // compute mirrored X coordinate
+  const mx = overlay.width - x - w;
+
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = `rgb(${r},${g},${b})`;
+  ctx.beginPath(); 
+  ctx.rect(mx, y, w, h); 
+  ctx.stroke();
+
+  let text = "";
+  if(j.spoof === "spoof"){
+    text = "❌ SPOOF DETECTED";
+  } else if(j.spoof === "real" && j.match === true){
+    text = `✅ VERIFIED: ${userId}`;
+  } else if(j.spoof === "real" && j.match === false){
+    text = "⚠ REAL FACE — MISMATCH";
+  }
+
+  ctx.font = '18px Arial';
+  ctx.fillStyle = '#fff';
+  ctx.fillText(text, mx + 4, Math.max(20, y - 6));
+
+  ctx.restore();
+
+  status(text);
+}
+
+
+function showSavedIndicator(path){
+  if(path){
+    savedLinkSpan.innerHTML = `<a href="${path}" target="_blank">View</a>`;
+  } else {
+    savedLinkSpan.textContent = "";
+  }
+  savedIndicator.style.display = "inline-block";
+  setTimeout(()=>{ savedIndicator.style.display = "none"; savedLinkSpan.textContent = ""; }, 4000);
+}
+
+async function markAttendance(eventType){
+  if(!lastResult){ status('No recent detection to confirm'); return; }
+  if(lastResult.json.spoof !== "real" || lastResult.json.match !== true){
+    status("Face not verified!"); return;
+  }
+
+  status(`Sending ${eventType} for ${userId}...`);
+  try{
+    const payload = { user_id: userId, event: eventType };
+    const res = await fetch(`${SERVER_URL}/mark_attendance`, {
+      method:'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const j = await res.json();
+    if(j.status === "marked"){
+      status(`✅ ${eventType} marked for ${j.user_id} at ${j.time}`);
+    } else {
+      status(`✖ ${j.message}`);
+    }
+  }catch(err){
+    status('Error marking attendance: ' + (err.message || err));
+  }
+}
+
+checkInBtn.addEventListener('click', ()=> markAttendance("IN"));
+checkOutBtn.addEventListener('click', ()=> markAttendance("OUT"));
+startBtn.addEventListener('click', startCamera);
+stopBtn.addEventListener('click', stopCamera);
+window.addEventListener('beforeunload', ()=>{ stopCamera(); });
+</script>
+</body>
+</html>

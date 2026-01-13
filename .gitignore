@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual env
+venv/
+venv310/
+
+# OS
+.DS_Store
+
+# Databases & logs
+*.db
+*.csv
+suspicious_log.csv
+
+# Model weights (DO NOT PUSH)
+models/**/weights/
+models/**/*.pth
+models/**/*.onnx
