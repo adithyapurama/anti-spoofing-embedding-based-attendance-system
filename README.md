@@ -49,25 +49,27 @@ No Match → Log Unmatched Event
 
 ## 4. Repository Structure
 
-
+```text
 anti-spoofing-embedding-based-attendance-system/
-├── flask_app.py              # Main application entry point (Routes, Logic, Init)
-├── Attendance.csv            # Daily attendance logs
-├── suspicious_log.csv        # Log of potential security breaches
+├── flask_app.py
+├── Attendance.csv
+├── suspicious_log.csv
 ├── models/
-│   ├── anti_spoof/           # PyTorch weights for MiniFASNet
-│   ├── arcface/              # ArcFace ONNX model
-│   ├── face_detection/       # SCRFD ONNX model
-│   └── users.db              # SQLite database for user credentials and embeddings
-├── anti_spoof_predict.py     # Class for loading and running Anti-Spoof models
-├── alignment.py              # Face alignment logic (similarity transform)
-├── convert_to_onnx.py        # Utility to export RetinaFace models to ONNX
-├── camera_test.py            # Script for testing camera and detection independently
-├── utility.py                # Helper functions for model parsing and kernel sizes
-├── detect.py                 # Standalone detection script
+│   ├── anti_spoof/
+│   ├── arcface/
+│   ├── face_detection/
+│   └── users.db
+├── anti_spoof_predict.py
+├── alignment.py
+├── convert_to_onnx.py
+├── camera_test.py
+├── utility.py
+├── detect.py
 └── static/
-    ├── enrollment_images/    # Stores best-quality image per enrolled user
-    └── suspicious_frames/    # Stores images of spoof attempts or intruders
+    ├── enrollment_images/
+    └── suspicious_frames/
+```
+
 
 ## 5. Model Stack Explanation
 Face Detection
