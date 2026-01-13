@@ -1,5 +1,3 @@
-Anti-Spoofing Embedding-Based Attendance System
-
 # Anti-Spoofing Embedding-Based Attendance System
 
 ## Real-Time Attendance Verification Demo
@@ -12,62 +10,45 @@ Anti-Spoofing Embedding-Based Attendance System
 </p>
 
 
-1. Overview
+## 1. Overview
+
 This project implements a secure, real-time biometric attendance system designed to mitigates common presentation attacks (print, replay, and screen-based spoofs). Unlike traditional face recognition systems that only match identity, this solution integrates a liveness detection layer using MiniFASNet to ensure the subject is a live human before processing identification.
 
 The system utilizes Flask for the backend interface, ONNX Runtime for high-performance inference, and SQLite for lightweight user management. It captures video from a webcam, detects faces, verifies liveness, and matches the user against a database of high-dimensional embeddings using ArcFace.
 
-2. Core Features
- Liveness Detection: Integrates AntiSpoofPredict (MiniFASNet) to distinguish between real faces and digital/print spoofs.
+## 2. Core Features
 
- High-Fidelity Recognition: Uses ArcFace to generate 512-dimensional feature vectors for precise identity verification.
+- **Liveness Detection:** MiniFASNet-based anti-spoofing to distinguish real faces from print/replay attacks  
+- **Face Recognition:** ArcFace embedding-based identity verification  
+- **Weighted Enrollment:** Multi-image registration with quality-based weighting  
+- **Uncertainty Modeling:** Variance-penalized similarity scoring  
+- **Suspicious Activity Logging:** Automatic spoof and mismatch capture  
+- **Efficient Inference:** ONNX Runtime for detection and recognition  
+- **Web Interface:** Flask-based admin and employee UI  
 
- Weighted Enrollment: Implements a robust registration process that captures multiple images, analyzes image quality (sharpness and area), and generates a weighted mean embedding and variance model for the user.
 
- Uncertainty Modeling: Incorporates a variance penalty during the matching phase to reduce false positives for users with inconsistent enrollment data.
+## 3. End-to-End Workflow
 
- Suspicious Activity Logging: Automatically detects, logs, and saves images of spoofing attempts or unmatched faces to a "suspicious" directory for security audits.
+[Webcam Input]  
+↓  
+[Face Detection (SCRFD)] → No Face → Ignore Frame  
+↓  
+[Face Alignment (112×112)]  
+↓  
+[Anti-Spoofing Check (MiniFASNet)]  
+├── Spoof → Log Event + Save Frame  
+└── Real  
+  ↓  
+[ArcFace Embedding Extraction]  
+↓  
+[Similarity + Variance Penalty]  
+↓  
+Match → Attendance IN/OUT  
+No Match → Log Unmatched Event
 
- Efficient Inference: Utilizes ONNX Runtime for the face detector (SCRFD) and recognizer (ArcFace) to ensure low latency on CPU.
 
- Web Interface: Provides a browser-based UI for administrative enrollment, employee login, and real-time attendance marking.
+## 4. Repository Structure
 
-3. End-to-End Workflow Diagram
-
-[Webcam Input]
-      |
-      v
-[Face Detection (SCRFD)] --> (No Face) --> [Ignore Frame]
-      |
-      v
-[Face Alignment] --> (5-Point Landmarks) --> [112x112 Norm Crop]
-      |
-      v
-[Anti-Spoofing Check (MiniFASNet)]
-      |
-      +---> (Spoof Detected) --> [Log to CSV] --> [Save Image to Suspicious Dir] --> [Alert UI]
-      |
-      v
-   (Real Face)
-      |
-      v
-[Feature Extraction (ArcFace)] --> [512-D Embedding]
-      |
-      v
-[Database Retrieval] --> [Fetch User Embedding & Variance]
-      |
-      v
-[Similarity Calculation]
-(Cosine Similarity - Variance Penalty)
-      |
-      v
-[Threshold Check (> 0.55)]
-      |
-      +---> (Match) --> [Mark Attendance (IN/OUT)] --> [Update CSV]
-      |
-      +---> (No Match) --> [Log Unmatched Event]
-
-4. Repository Structure
 
 anti-spoofing-embedding-based-attendance-system/
 ├── flask_app.py              # Main application entry point (Routes, Logic, Init)
@@ -88,7 +69,7 @@ anti-spoofing-embedding-based-attendance-system/
     ├── enrollment_images/    # Stores best-quality image per enrolled user
     └── suspicious_frames/    # Stores images of spoof attempts or intruders
 
-5. Model Stack Explanation
+## 5. Model Stack Explanation
 Face Detection
 The system uses SCRFD (Sample and Computation Redistribution for Face Detection) via ONNX. It provides high-speed face detection and 5-point landmark regression (eyes, nose, mouth corners) required for alignment.
 
@@ -117,7 +98,7 @@ Identity verification is handled by ArcFace (ResNet-100 backbone) converted to O
 
     Output: 512-dimensional normalized embedding vector.
 
-6. Anti-Spoofing Decision Logic
+## 6. Anti-Spoofing Decision Logic
 The AntiSpoofPredict class aggregates predictions. The decision logic in flask_app.py is as follows:
 
  1. The detected face is resized and passed through the loaded anti-spoofing models.
@@ -132,15 +113,15 @@ The AntiSpoofPredict class aggregates predictions. The decision logic in flask_a
 
  4. If the score is below 0.9, the frame is flagged as a potential spoof, even if the argmax class is Real.
 
-7. Face Verification & Thresholding Strategy
+## 7. Face Verification & Thresholding Strategy
 The system employs a sophisticated matching strategy that accounts for enrollment quality.
  1. Cosine Similarity: Calculates the dot product of the    input embedding and the stored user embedding (both normalized).
  2. Variance Penalty: The system subtracts the stored variance of the user's enrollment embeddings from the similarity score.
-  Formula: $Score = Cosine(Emb_{new}, Emb_{stored}) - Mean(Var_{stored})$
+  Formula: Score = Cosine(Embedding_new, Embedding_stored) − Mean(Variance_stored)
   This penalizes users who had poor or inconsistent lighting/angles during enrollment, requiring a closer match for verification.
  3. Decision: If $Score > 0.55$ (MATCH_THRESHOLD),the      identity is verified.
 
-8. User Enrollment Strategy
+## 8. User Enrollment Strategy
 To ensure a high-quality reference database, enrollment is not a single-shot process:
 
  1. Multiple Captures: The admin captures up to 7 images of the user.
@@ -155,7 +136,7 @@ To ensure a high-quality reference database, enrollment is not a single-shot pro
 
  4. Database Storage: The system stores the mean embedding (identity) and the variance (uncertainty) in users.db.
 
-9. Attendance Logging Mechanism
+## 9. Attendance Logging Mechanism
 Attendance is recorded in Attendance.csv.
 
     Fields: User ID, Date, Time, Event (IN/OUT).
@@ -164,7 +145,7 @@ Attendance is recorded in Attendance.csv.
 
     Suspicious Cleanup: Upon a successful "OUT" event, temporary suspicious frames associated with that user session are cleaned up to manage storage.
 
-10. Handling Spoofing & Suspicious Events
+## 10. Handling Spoofing & Suspicious Events
 Security events are tracked in suspicious_tracker to prevent log flooding.
 
     Triggers:
@@ -183,7 +164,7 @@ Security events are tracked in suspicious_tracker to prevent log flooding.
 
     Throttling: Suspicious events for the same user are logged at most once every 5 seconds.
 
-11. Environment Setup
+## 11. Environment Setup
 The project relies on Python 3.x and specific libraries for computer vision and deep learning.
 
 Prerequisites:
@@ -194,14 +175,14 @@ Prerequisites:
 
     Visual C++ Redistributable (if on Windows)
 
-12. Dependency Installation
+## 12. Dependency Installation
 Install the required packages using pip.
 
-pip install flask opencv-python numpy torch torchvision onnxruntime six scikit-image easydict
+    pip install flask opencv-python numpy torch torchvision onnxruntime six scikit-image easydict
 
 Note: For GPU acceleration, install onnxruntime-gpu and the appropriate PyTorch CUDA version.
 
-13. How to Run the Project
+## 13. How to Run the Project
     1. Clone the repository:
     git clone https://github.com/your-username/anti-spoofing-embedding-based-attendance-system.git
     cd anti-spoofing-embedding-based-attendance-system
@@ -210,7 +191,7 @@ Note: For GPU acceleration, install onnxruntime-gpu and the appropriate PyTorch 
     python flask_app.py
     4. Access the Interface: Open a web browser and navigate to http://localhost:2000.
 
-14. Configuration Parameters
+## 14. Configuration Parameters
 Key configurations are located in flask_app.py:
 
     TARGET_SIZE = (640, 480): Input resolution for the camera.
@@ -223,7 +204,7 @@ Key configurations are located in flask_app.py:
 
     SPOOF_CONF_THRESHOLD = 0.9: Minimum confidence to pass liveness check.
 
-15. Known Constraints
+## 15. Known Constraints
     
     Lighting: Strong backlighting or very low light may affect Anti-Spoofing accuracy.
 
@@ -231,7 +212,7 @@ Key configurations are located in flask_app.py:
 
     Compute: While ONNX is optimized, the Anti-Spoofing step runs in PyTorch; running on a CPU-only machine may result in lower FPS.
 
-16. Potential Enhancements
+## 16. Potential Enhancements
     HTTPS Support: Essential for browser webcam permissions in production.
 
     Database Migration: Move from SQLite/CSV to PostgreSQL for scalability.
@@ -239,3 +220,8 @@ Key configurations are located in flask_app.py:
     Asynchronous Processing: Offload model inference to a background thread or Celery worker to improve UI responsiveness.
 
     Dockerization: Containerize the application for easier deployment
+
+## 17. License
+
+This project is intended for academic and research purposes.
+License to be defined.
