@@ -29,6 +29,7 @@ The system utilizes Flask for the backend interface, ONNX Runtime for high-perfo
 
 ## 3. End-to-End Workflow
 
+```text
 [Webcam Input]  
 ↓  
 [Face Detection (SCRFD)] → No Face → Ignore Frame  
@@ -45,7 +46,7 @@ The system utilizes Flask for the backend interface, ONNX Runtime for high-perfo
 ↓  
 Match → Attendance IN/OUT  
 No Match → Log Unmatched Event
-
+```
 
 ## 4. Repository Structure
 
